@@ -56,7 +56,9 @@ func (s *SimpleServer) getAddress() string {
 }
 
 func (s *SimpleServer) isAlive() bool {
-	return true
+	resp, err := http.Get("http://google.com/")
+	handleError(err)
+	return (resp.StatusCode == 200)
 }
 
 func (s *SimpleServer) serve(rw http.ResponseWriter, r *http.Request) {
@@ -64,18 +66,24 @@ func (s *SimpleServer) serve(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (lb *LoadBalancer) getNextAvailableServer() Server {
-	// use isalive ?
-	var oldroundRobinCount = lb.roundRobinCount
-	lb.roundRobinCount = (lb.roundRobinCount + 1) % len(lb.servers)
-	return lb.servers[oldroundRobinCount]
+	server := lb.servers[lb.roundRobinCount%len(lb.servers)]
+	for !server.isAlive() {
+		lb.roundRobinCount = lb.roundRobinCount + 1
+		server = lb.servers[lb.roundRobinCount%len(lb.servers)]
+	}
+	lb.roundRobinCount++
+	//fmt.Println("roundrobin count", lb.roundRobinCount)
+	return server
 }
 func (lb *LoadBalancer) serveProxy(rw http.ResponseWriter, r *http.Request) {
-
+	targetServer := lb.getNextAvailableServer()
+	fmt.Println("forwarding request to address: ", targetServer.getAddress())
+	targetServer.serve(rw, r)
 }
 
 func main() {
 	servers := []Server{
-		newSimpleServer("https://www.facebook.com"),
+		newSimpleServer("https://www.bing.com"),
 		newSimpleServer("https://www.google.com"),
 		newSimpleServer("https://www.duckduckgo.com"),
 	}
